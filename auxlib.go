@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"strings"
 )
@@ -350,12 +351,12 @@ func (ls *LState) CallMeta(obj LValue, event string) LValue {
 /* load and function call operations {{{ */
 
 func (ls *LState) LoadFile(path string) (*LFunction, error) {
-	var file *os.File
+	var file fs.File
 	var err error
 	if len(path) == 0 {
 		file = os.Stdin
 	} else {
-		file, err = os.Open(path)
+		file, err = ls.Open(path)
 		defer file.Close()
 		if err != nil {
 			return nil, newApiErrorE(ApiErrorFile, err)

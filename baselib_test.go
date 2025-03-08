@@ -3,6 +3,7 @@ package lua
 import (
 	"strconv"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -137,5 +138,60 @@ func assertOsDateFields(t *testing.T, key LValue, value LValue, expect time.Time
 		if value.String() != strconv.Itoa(expect.Second()) {
 			t.Errorf("sec=%v, expect.Second=%v", value.String(), expect.Second())
 		}
+	}
+}
+
+func TestLoadingFromVFS(t *testing.T) {
+	t.Parallel()
+
+	fs := fstest.MapFS{
+		".\\LOADME.lua": &fstest.MapFile{
+			Data: []byte(`return "Hello World!"`),
+		},
+	}
+
+	cases := []struct {
+		name   string
+		source string
+	}{
+		{
+			name: "loadfile",
+			source: `local returned, err = loadfile(".\\LOADME.lua")
+if err then error(err) end
+if returned() ~= "Hello World!" then
+    error("incorrect return "..returned())
+end`,
+		},
+		{
+			name: "dofile",
+			source: `local returned = dofile(".\\LOADME.lua")
+if returned ~= "Hello World!" then
+    error("incorrect return "..returned)
+end`,
+		},
+		{
+			name: "require",
+			source: `local returned = require("LOADME")
+if returned ~= "Hello World!" then
+    error("incorrect return "..returned)
+end`,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			ls := NewState(Options{
+				FS: fs,
+			})
+			defer ls.Close()
+
+			err := ls.DoString(tc.source)
+			if err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

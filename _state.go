@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"io/fs"
 	"math"
 	"os"
 	"runtime"
@@ -86,6 +87,12 @@ type P struct {
 
 /* Options {{{ */
 
+// Minimum file system that can be used in place of os' for scripts
+type VFS interface {
+	Open(path string) (fs.File, error)
+	Stat(path string) (fs.FileInfo, error)
+}
+
 // Options is a configuration that is used to create a new LState.
 type Options struct {
 	// Call stack size. This defaults to `lua.CallStackSize`.
@@ -105,6 +112,9 @@ type Options struct {
 	// If `MinimizeStackMemory` is set, the call stack will be automatically grown or shrank up to a limit of
 	// `CallStackSize` in order to minimize memory usage. This does incur a slight performance penalty.
 	MinimizeStackMemory bool
+	// File system to load lua scripts from instead of os' file system
+	// Will try to look in os' file system if a script is not found in FS
+	FS VFS
 }
 
 /* }}} */
@@ -2084,6 +2094,22 @@ func (ls *LState) RemoveCallerFrame() *callFrame {
 	parentFrame.Idx = sp - 2
 	cs.Pop()
 	return parentFrame
+}
+
+func (ls *LState) Open(path string) (fs.File, error) {
+	if ls.Options.FS != nil {
+		if file, err := ls.Options.FS.Open(path); err == nil {
+			return file, nil
+		}
+	}
+	return os.Open(path)
+}
+
+func (ls *LState) Stat(path string) (fs.FileInfo, error) {
+	if ls.Options.FS != nil {
+		return ls.Options.FS.Stat(path)
+	}
+	return os.Stat(path)
 }
 
 /* }}} */
